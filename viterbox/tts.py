@@ -167,9 +167,25 @@ class Viterbox:
         self.sr = 24000
         self.conds: Optional[TTSConds] = None
         
-    @classmethod
+@classmethod
     def from_pretrained(cls, device: str = "cuda") -> 'Viterbox':
-        ckpt_dir = Path(snapshot_download(repo_id=REPO_ID, repo_type="model", revision="main", allow_patterns=["ve.pt", "t3_ml24ls_v2.safetensors", "s3gen.pt", "tokenizer_vi_expanded.json", "conds.pt"], token=os.getenv("HF_TOKEN")))
+        ckpt_dir = Path(
+            snapshot_download(
+                repo_id=REPO_ID,
+                repo_type="model",
+                revision="main",
+                allow_patterns=[
+                    "ve.pt",
+                    "ve.onnx",        # <--- Bản thiết kế ONNX
+                    "ve.onnx.data",   # <--- Dữ liệu Weights ONNX
+                    "t3_ml24ls_v2.safetensors",
+                    "s3gen.pt",
+                    "tokenizer_vi_expanded.json",
+                    "conds.pt",
+                ],
+                token=os.getenv("HF_TOKEN"),
+            )
+        )
         return cls.from_local(ckpt_dir, device)
     
     @classmethod
