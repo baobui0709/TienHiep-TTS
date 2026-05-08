@@ -48,6 +48,17 @@ class T3(nn.Module):
         super().__init__()
         self.hp = hp
         self.cfg = LlamaConfig(**LLAMA_CONFIGS[hp.llama_config_name])
+        
+        # --- THÊM DÒNG NÀY ĐỂ BẬT FLASH ATTENTION VÀ BIÊN DỊCH LLAMA ---
+        # Ép sử dụng kiến trúc tối ưu (sdpa = scaled dot product attention)
+        self.cfg._attn_implementation = "sdpa"
+        
+        self.tfmr = LlamaModel(self.cfg)
+        
+        # ÉP XUNG GPU (Compile mô hình T3)
+        if torch.cuda.is_available():
+            print("🚀 T3: Đang kích hoạt torch.compile...")
+            self.tfmr = torch.compile(self.tfmr, mode="max-autotune")
         self.tfmr = LlamaModel(self.cfg)
         self.dim = self.cfg.hidden_size
         self.deepspeed_patch_applied = False
