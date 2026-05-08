@@ -103,6 +103,11 @@ class S3Token2Mel(torch.nn.Module):
             encoder=encoder,
             decoder=decoder
         )
+        
+        # --- ÉP XUNG FLOW-MATCHING (Giúp 10 bước chạy như bay) ---
+        if torch.cuda.is_available():
+            print("🚀 S3Gen: Đang kích hoạt torch.compile cho Flow Decoder...")
+            self.flow = torch.compile(self.flow, mode="reduce-overhead")
 
         self.resamplers = {}
 
@@ -148,9 +153,6 @@ class S3Token2Mel(torch.nn.Module):
 
         # Make sure mel_len = 2 * stoken_len (happens when the input is not padded to multiple of 40ms)
         if ref_mels_24.shape[1] != 2 * ref_speech_tokens.shape[1]:
-            # logging.warning(
-            #     "Reference mel length is not equal to 2 * reference token length.\n"
-            # )
             pass
             ref_speech_tokens = ref_speech_tokens[:, :ref_mels_24.shape[1] // 2]
             ref_speech_token_lens[0] = ref_speech_tokens.shape[1]
@@ -235,6 +237,11 @@ class S3Token2Wav(S3Token2Mel):
             source_resblock_dilation_sizes=[[1, 3, 5], [1, 3, 5], [1, 3, 5]],
             f0_predictor=f0_predictor,
         )
+        
+        # --- ÉP XUNG VOCODER (Chuyển Mel sang Wave) ---
+        if torch.cuda.is_available():
+            print("🚀 S3Gen: Đang kích hoạt torch.compile cho HiFiGAN...")
+            self.mel2wav = torch.compile(self.mel2wav, mode="max-autotune")
 
         # silence out a few ms and fade audio in to reduce artifacts
         n_trim = S3GEN_SR // 50  # 20ms = half of a frame
