@@ -31,7 +31,6 @@ def export_voice_encoder():
     ve.eval()
 
     # Dummy input: (Batch_size, Frames, Mel_channels)
-    # 160 là hp.ve_partial_frames mặc định
     dummy_mels = torch.randn(1, hp.ve_partial_frames, hp.num_mels, device=device)
 
     # Xuất ONNX
