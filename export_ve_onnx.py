@@ -5,7 +5,6 @@ from huggingface_hub import hf_hub_download
 from viterbox.models.voice_encoder.voice_encoder import VoiceEncoder
 from viterbox.models.voice_encoder.config import VoiceEncConfig
 
-# Bỏ qua các cảnh báo không cần thiết của PyTorch
 warnings.filterwarnings("ignore")
 
 def export_voice_encoder():
@@ -20,28 +19,28 @@ def export_voice_encoder():
         ve_path = hf_hub_download(repo_id="AnhTuan89/viterbox", filename="ve.pt", local_dir="pretrained")
 
     hp = VoiceEncConfig()
+    # 1. Tắt flatten từ config
     hp.flatten_lstm_params = False 
     
     ve = VoiceEncoder(hp).to(device)
     ve.load_state_dict(torch.load(ve_path, map_location=device))
     ve.eval()
 
-    # [QUAN TRỌNG] Hack để chặn lỗi "FakeTensor" của LSTM trên PyTorch 2.x
+    # 2. Hack để chặn lỗi "FakeTensor" của LSTM
     ve.lstm.flatten_parameters = lambda: None
 
     dummy_mels = torch.randn(1, hp.ve_partial_frames, hp.num_mels, device=device)
 
-    # Sử dụng JIT Trace để ép PyTorch dùng engine ổn định thay vì Dynamo
-    print("Đang đóng băng đồ thị (JIT Trace)...")
-    traced_model = torch.jit.trace(ve, dummy_mels)
-
     onnx_path = "pretrained/ve.onnx"
+    print("Đang biên dịch và xuất sang ONNX...")
+    
+    # 3. TRUYỀN TRỰC TIẾP `ve` (Python Module), KHÔNG DÙNG JIT TRACE
     torch.onnx.export(
-        traced_model,
+        ve,
         dummy_mels,
         onnx_path,
         export_params=True,
-        opset_version=18, # Nâng lên opset 18 theo chuẩn mới
+        opset_version=17,
         do_constant_folding=True,
         input_names=['mels'],
         output_names=['speaker_embed'],
