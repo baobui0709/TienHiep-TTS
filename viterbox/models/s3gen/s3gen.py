@@ -18,6 +18,9 @@ from .flow_matching import CausalConditionalCFM
 from .decoder import ConditionalDecoder
 
 
+logger = logging.getLogger(__name__)
+
+
 def drop_invalid_tokens(x):
     assert (
         len(x.shape) <= 2 and x.shape[0] == 1
@@ -86,20 +89,28 @@ class S3Token2Mel(torch.nn.Module):
             estimator=estimator,
         )
 
+        # IMPORTANT: do not compile before load_state_dict().
         self.flow = CausalMaskedDiffWithXvec(
             encoder=encoder,
             decoder=decoder,
         )
-
-        if torch.cuda.is_available():
-            print("🚀 S3Gen: Đang kích hoạt torch.compile cho Flow Decoder...")
-            self.flow = torch.compile(self.flow, mode="reduce-overhead")
+        self._flow_compiled = False
 
         self.resamplers = {}
 
     @property
     def device(self):
         return next(self.tokenizer.parameters()).device
+
+    def compile_flow_for_inference(self):
+        """Compile flow after checkpoint weights have been loaded."""
+        if self._flow_compiled:
+            return
+
+        if torch.cuda.is_available():
+            print("🚀 S3Gen: Đang kích hoạt torch.compile cho Flow Decoder sau khi load weights...")
+            self.flow = torch.compile(self.flow, mode="reduce-overhead")
+            self._flow_compiled = True
 
     def embed_ref(
         self,
@@ -188,6 +199,7 @@ class S3Token2Wav(S3Token2Mel):
 
         f0_predictor = ConvRNNF0Predictor()
 
+        # IMPORTANT: do not compile before load_state_dict().
         self.mel2wav = HiFTGenerator(
             sampling_rate=S3GEN_SR,
             upsample_rates=[8, 5, 3],
@@ -200,10 +212,7 @@ class S3Token2Wav(S3Token2Mel):
             ],
             f0_predictor=f0_predictor,
         )
-
-        if torch.cuda.is_available():
-            print("🚀 S3Gen: Đang kích hoạt torch.compile cho HiFiGAN...")
-            self.mel2wav = torch.compile(self.mel2wav, mode="max-autotune")
+        self._mel2wav_compiled = False
 
         n_trim = S3GEN_SR // 50
 
@@ -213,6 +222,16 @@ class S3Token2Wav(S3Token2Mel):
         ) / 2
 
         self.register_buffer("trim_fade", trim_fade, persistent=False)
+
+    def compile_mel2wav_for_inference(self):
+        """Compile HiFT/HiFiGAN after checkpoint weights have been loaded."""
+        if self._mel2wav_compiled:
+            return
+
+        if torch.cuda.is_available():
+            print("🚀 S3Gen: Đang kích hoạt torch.compile cho HiFiGAN sau khi load weights...")
+            self.mel2wav = torch.compile(self.mel2wav, mode="max-autotune")
+            self._mel2wav_compiled = True
 
     def forward(
         self,
