@@ -425,6 +425,10 @@ class Viterbox:
         t3.load_state_dict(t3_state)
         t3.to(device).eval()
 
+        # Compile only after load_state_dict(), otherwise keys become tfmr._orig_mod.*
+        if hasattr(t3, "compile_for_inference"):
+            t3.compile_for_inference()
+
         s3gen = S3Gen()
         s3gen.load_state_dict(
             torch.load(
@@ -434,6 +438,13 @@ class Viterbox:
             )
         )
         s3gen.to(device).eval()
+
+        # Compile only after load_state_dict(), otherwise keys become *_orig_mod.*
+        if hasattr(s3gen, "compile_flow_for_inference"):
+            s3gen.compile_flow_for_inference()
+
+        if hasattr(s3gen, "compile_mel2wav_for_inference"):
+            s3gen.compile_mel2wav_for_inference()
 
         tokenizer = MTLTokenizer(str(ckpt_dir / "tokenizer_vi_expanded.json"))
 
