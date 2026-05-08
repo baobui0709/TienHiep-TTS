@@ -50,16 +50,14 @@ class T3(nn.Module):
         self.cfg = LlamaConfig(**LLAMA_CONFIGS[hp.llama_config_name])
         
         # --- THÊM DÒNG NÀY ĐỂ BẬT FLASH ATTENTION VÀ BIÊN DỊCH LLAMA ---
-        # Ép sử dụng kiến trúc tối ưu (sdpa = scaled dot product attention)
         self.cfg._attn_implementation = "sdpa"
-        
         self.tfmr = LlamaModel(self.cfg)
         
         # ÉP XUNG GPU (Compile mô hình T3)
         if torch.cuda.is_available():
             print("🚀 T3: Đang kích hoạt torch.compile...")
             self.tfmr = torch.compile(self.tfmr, mode="max-autotune")
-        self.tfmr = LlamaModel(self.cfg)
+            
         self.dim = self.cfg.hidden_size
         self.deepspeed_patch_applied = False
 
@@ -281,23 +279,6 @@ class T3(nn.Module):
             )
             self.patched_model = patched_model
             self.compiled = True
-
-        # # Run normal generate method, which calls our custom extended methods
-        # return self.patched_model.generate(
-        #     inputs=initial_speech_tokens,
-        #     decoder_cond=embeds,
-        #     bos_token_id=self.hp.start_speech_token,
-        #     eos_token_id=(self.hp.stop_speech_token if stop_on_eos else -1),
-        #     pad_token_id=self.hp.stop_speech_token,
-        #     max_new_tokens=max_new_tokens or self.hp.max_speech_tokens,
-        #     num_return_sequences=num_return_sequences,
-        #     temperature=temperature,
-        #     top_p=top_p,
-        #     length_penalty=length_penalty,
-        #     repetition_penalty=repetition_penalty,
-        #     do_sample=do_sample,
-        #     # cache_implementation=None if not self.compiled else "static",
-        # )
 
         device = embeds.device
 
