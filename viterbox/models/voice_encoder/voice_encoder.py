@@ -86,9 +86,8 @@ class VoiceEncoder(nn.Module):
         self.hp = hp
         self.ort_session = None
 
-        # Load engine ONNX nếu có file
         if onnx_path is not None and os.path.exists(onnx_path) and HAS_ORT:
-            print(f"⚡ Đang sử dụng engine ONNX siêu tốc cho Voice Encoder: {onnx_path}")
+            print(f"⚡ Đang sử dụng engine ONNX siêu tốc cho Voice Encoder...")
             self.ort_session = ort.InferenceSession(str(onnx_path), providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
         else:
             self.lstm = nn.LSTM(self.hp.num_mels, self.hp.ve_hidden_size, num_layers=3, batch_first=True)
@@ -106,13 +105,11 @@ class VoiceEncoder(nn.Module):
         return next(self.parameters()).device
 
     def forward(self, mels: torch.FloatTensor):
-        # Chạy inference trên ONNX
         if self.ort_session is not None:
             ort_inputs = {self.ort_session.get_inputs()[0].name: mels.cpu().numpy()}
             ort_outs = self.ort_session.run(None, ort_inputs)
             return torch.from_numpy(ort_outs[0]).to(mels.device)
 
-        # Chạy inference trên PyTorch thuần
         if self.hp.normalized_mels and (mels.min() < 0 or mels.max() > 1):
             raise Exception(f"Mels outside [0, 1]. Min={mels.min()}, Max={mels.max()}")
 
@@ -187,7 +184,7 @@ class VoiceEncoder(nn.Module):
             wavs = [librosa.effects.trim(wav, top_db=trim_top_db)[0] for wav in wavs]
 
         if "rate" not in kwargs:
-            kwargs["rate"] = 1.3  # Resemble's default value.
+            kwargs["rate"] = 1.3 
 
         mels = [melspectrogram(w, self.hp).T for w in wavs]
 
