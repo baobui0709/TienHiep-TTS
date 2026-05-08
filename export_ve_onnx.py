@@ -24,6 +24,12 @@ def export_voice_encoder():
 
     # Khởi tạo mô hình và cấu hình
     hp = VoiceEncConfig()
+    
+    # -------------------------------------------------------------
+    # FIX LỖI: Tắt flatten parameters để PyTorch 2.x có thể Trace ONNX
+    # -------------------------------------------------------------
+    hp.flatten_lstm_params = False 
+    
     ve = VoiceEncoder(hp).to(device)
     
     # Load weights
@@ -33,7 +39,7 @@ def export_voice_encoder():
     # Dummy input: (Batch_size, Frames, Mel_channels)
     dummy_mels = torch.randn(1, hp.ve_partial_frames, hp.num_mels, device=device)
 
-    # Xuất ONNX
+    # Xuất ONNX (Sử dụng cách thức truyền thống, ổn định cho LSTM)
     onnx_path = "pretrained/ve.onnx"
     torch.onnx.export(
         ve,
