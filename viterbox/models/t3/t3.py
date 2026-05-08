@@ -1,5 +1,5 @@
 import logging
-from typing import Union, Optional, List
+from typing import Optional
 
 from tqdm import tqdm
 import torch
@@ -48,11 +48,12 @@ class T3(nn.Module):
         self.cfg = LlamaConfig(**LLAMA_CONFIGS[hp.llama_config_name])
         self.cfg._attn_implementation = "sdpa"
 
+        # IMPORTANT:
+        # Do not torch.compile() here. load_state_dict() expects raw keys like
+        # "tfmr.layers...". Compiling before loading wraps the module under
+        # "_orig_mod" and causes missing/unexpected key errors.
         self.tfmr = LlamaModel(self.cfg)
-
-        if torch.cuda.is_available():
-            print("🚀 T3: Đang kích hoạt torch.compile...")
-            self.tfmr = torch.compile(self.tfmr, mode="max-autotune")
+        self._tfmr_compiled = False
 
         self.dim = self.cfg.hidden_size
         self.deepspeed_patch_applied = False
@@ -91,6 +92,16 @@ class T3(nn.Module):
     @property
     def device(self):
         return self.speech_head.weight.device
+
+    def compile_for_inference(self):
+        """Compile the transformer after checkpoint weights have been loaded."""
+        if self._tfmr_compiled:
+            return
+
+        if torch.cuda.is_available():
+            print("🚀 T3: Đang kích hoạt torch.compile sau khi load weights...")
+            self.tfmr = torch.compile(self.tfmr, mode="max-autotune")
+            self._tfmr_compiled = True
 
     def prepare_conditioning(self, t3_cond: T3Cond):
         if (
@@ -316,8 +327,6 @@ class T3(nn.Module):
             text_tokens=text_tokens,
             speech_tokens=initial_speech_tokens,
         )
-
-        self.compiled = False
 
         if not self.compiled:
             alignment_stream_analyzer = AlignmentStreamAnalyzer(
