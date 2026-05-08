@@ -19,14 +19,12 @@ def export_voice_encoder():
         ve_path = hf_hub_download(repo_id="AnhTuan89/viterbox", filename="ve.pt", local_dir="pretrained")
 
     hp = VoiceEncConfig()
-    # 1. Tắt flatten từ config
     hp.flatten_lstm_params = False 
     
     ve = VoiceEncoder(hp).to(device)
     ve.load_state_dict(torch.load(ve_path, map_location=device))
     ve.eval()
 
-    # 2. Hack để chặn lỗi "FakeTensor" của LSTM
     ve.lstm.flatten_parameters = lambda: None
 
     dummy_mels = torch.randn(1, hp.ve_partial_frames, hp.num_mels, device=device)
@@ -34,7 +32,6 @@ def export_voice_encoder():
     onnx_path = "pretrained/ve.onnx"
     print("Đang biên dịch và xuất sang ONNX...")
     
-    # 3. TRUYỀN TRỰC TIẾP `ve` (Python Module), KHÔNG DÙNG JIT TRACE
     torch.onnx.export(
         ve,
         dummy_mels,
@@ -45,7 +42,7 @@ def export_voice_encoder():
         input_names=['mels'],
         output_names=['speaker_embed'],
         dynamic_axes={
-            'mels': {0: 'batch_size', 1: 'frames'}, 
+            'mels': {0: 'batch_size'}, # FIX: Bỏ khai báo dynamic cho chiều frames vì nó cố định là 160
             'speaker_embed': {0: 'batch_size'}
         }
     )
